@@ -3,20 +3,9 @@ import numpy as np
 from si.data.dataset import Dataset
 from si.metrics.accuracy import accuracy
 
-
-class VotingClassifier:
-    """
-    Ensemble classifier that uses the majority vote to predict the class labels.
-
-    Parameters
-    ----------
-    models : array-like, shape = [n_models]
-        Different models for the ensemble.
-
-    Attributes
-    ----------
-    """
-    def __init__(self, models):
+class StackingClassifier():
+    
+    def __init__(self,models, final_model):
         """
         Initialize the ensemble classifier.
 
@@ -24,12 +13,15 @@ class VotingClassifier:
         ----------
         models: array-like, shape = [n_models]
             Different models for the ensemble.
+        final_model: 
+            Final model chosen
 
         """
         # parameters
         self.models = models
-
-    def fit(self, dataset: Dataset) -> 'VotingClassifier':
+        self.final_model = final_model
+    
+    def fit(self, dataset: Dataset) -> 'StackingClassifier':
         """
         Fit the models according to the given training data.
 
@@ -40,15 +32,20 @@ class VotingClassifier:
 
         Returns
         -------
-        self : VotingClassifier
+        self : StackingClassifier
             The fitted model.
         """
         for model in self.models:
             model.fit(dataset)
+
+        models_predictions = np.array([model.predict(dataset) for model in self.models]).transpose()
+        n_dataset = Dataset(models_predictions, dataset.y)
         
-
+        #train the final model
+        self.final_model.fit(n_dataset)
+        
         return self
-
+        
     def predict(self, dataset: Dataset) -> np.ndarray:
         """
         Predict class labels for samples in X.
@@ -63,28 +60,9 @@ class VotingClassifier:
         y : array-like, shape = [n_samples]
             The predicted class labels.
         """
-
-        # helper function
-        def _get_majority_vote(pred: np.ndarray) -> int:
-            """
-            It returns the majority vote of the given predictions
-
-            Parameters
-            ----------
-            pred: np.ndarray
-                The predictions to get the majority vote of
-
-            Returns
-            -------
-            majority_vote: int
-                The majority vote of the given predictions
-            """
-            # get the most common label
-            labels, counts = np.unique(pred, return_counts=True)
-            return labels[np.argmax(counts)]
-
-        predictions = np.array([model.predict(dataset) for model in self.models]).transpose()
-        return np.apply_along_axis(_get_majority_vote, axis=1, arr=predictions)
+        n_dataset = self.fit(dataset)
+        results = self.final_model.predict(n_dataset)
+        return results
 
     def score(self, dataset: Dataset) -> float:
         """
@@ -102,7 +80,6 @@ class VotingClassifier:
         """
         return accuracy(dataset.y, self.predict(dataset))
 
-
 if __name__ == '__main__':
     # import dataset
     from si.data.dataset import Dataset
@@ -117,14 +94,15 @@ if __name__ == '__main__':
     # initialize the KNN and Logistic classifier
     knn = KNNClassifier(k=3)
     lg = LogisticRegression(l2_penalty=1, alpha=0.001, max_iter=1000)
-
+    knn_2 = KNNClassifier(k=3)
+    
     # initialize the Voting classifier
-    voting = VotingClassifier([knn, lg])
+    stacking = StackingClassifier([knn, lg], knn_2)
 
-    voting.fit(dataset_train)
+    stacking.fit(dataset_train)
 
     # compute the score
-    score = voting.score(dataset_test)
+    score = stacking.score(dataset_test)
     print(f"Score: {score}")
 
-    print(voting.predict(dataset_test))
+    print(stacking.predict(dataset_test))
