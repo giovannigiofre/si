@@ -2,6 +2,7 @@ import copy
 from abc import abstractmethod
 
 import numpy as np
+import scipy
 
 from si.neural_networks.optimizers import Optimizer
 
@@ -210,3 +211,84 @@ class DenseLayer(Layer):
             The shape of the output of the layer.
         """
         return (self.n_units,)
+
+class Dropout(Layer):
+    """
+    randomly and temporarily ignore a set of neurons during training.
+    """
+    def __init__(self, probability: float):
+        """
+        Initialize the dense layer.
+
+        Parameters
+        ----------
+        probability: float
+            the dropout rate, between 0 and 1.
+        """
+        super().__init__()
+        self.probability = probability
+
+        self.mask = None
+        self.output = None
+        self.input = None
+    
+    def forward_propagation(self, input: np.ndarray, training: bool) -> np.ndarray:
+        """
+        Perform forward propagation on the given input.
+
+        Parameters
+        ----------
+        input: numpy.ndarray
+            The input to the layer.
+        training: bool
+            Whether the layer is in training mode or in inference mode.
+
+        Returns
+        -------
+        numpy.ndarray
+            The output of the layer.
+        """
+        if training == True:
+            scaling_factor =  (1 / (1 - self.probability))
+            self.input = input
+            self.mask = scipy.stats.binom.stats(self._input_shape, (1 - self.probability))
+            self.output = np.dot(self.input, self.mask, scaling_factor)
+            return self.output
+        else:
+            return self.input
+        
+    def backward_propagation(self, output_error: np.ndarray) -> float:
+        """
+        Perform backward propagation on the given output error.
+        Computes the dE/dW, dE/dB for a given output_error=dE/dY.
+        Returns input_error=dE/dX to feed the previous layer.
+
+        Parameters
+        ----------
+        output_error: numpy.ndarray
+            The output error of the layer.
+
+        Returns
+        -------
+        float
+            The input error of the layer.
+        """
+        self.output_error = output_error
+        return self.output_error * self.mask
+    
+    def output_shape(self) -> tuple:
+        """
+        Returns the shape of the input of the layer.
+
+        Returns
+        -------
+        tuple
+            The shape of the input of the layer.
+        """
+        return self._input_shape
+
+    def parameters(self) -> int:
+        """
+     
+        """
+        return 0
